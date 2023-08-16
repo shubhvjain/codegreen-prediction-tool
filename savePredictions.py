@@ -6,6 +6,9 @@ import os
 import datetime
 import logging
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def getLogFileName(country):
     current_month = datetime.now().strftime('%m')
