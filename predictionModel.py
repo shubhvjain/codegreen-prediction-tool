@@ -100,7 +100,7 @@ def model_run(model_name,input):
     # Create a DataFrame 
     forecast_df = pd.DataFrame({'startTime': next_48_hours_df['startTime'], 'percentRenewableForecast': forecast_values_total})
     forecast_df["percentRenewableForecast"] = forecast_df["percentRenewableForecast"].round().astype(int)
-
+    forecast_df['percentRenewableForecast'] = forecast_df['percentRenewableForecast'].apply(lambda x: 0 if x <= 0 else x)
     return forecast_df
 
 
