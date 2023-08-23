@@ -91,7 +91,7 @@ def model_run(model_name,input):
         scaled_prev_values_total = scaler.fit_transform(prev_values_total.reshape(-1, 1))
         x_pred_total = scaled_prev_values_total[-(seq_length-1):].reshape(1, (seq_length-1), 1)
         # Make the prediction using the loaded model
-        predicted_value_total = lstm.predict(x_pred_total)
+        predicted_value_total = lstm.predict(x_pred_total,verbose = 0)
         # Inverse transform the predicted value
         predicted_value_total = scaler.inverse_transform(predicted_value_total)
         forecast_values_total.append(predicted_value_total[0][0])

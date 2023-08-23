@@ -7,29 +7,29 @@ import datetime
 import logging
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(".config")
 
 def check():
-  required_envs = ["ENTSOE_TOKEN","PREDICTIONS_FOLDER_PATH","PREDICTIONS_LOG_FOLDER_PATH"]
+  required_envs = ["ENTSOE_TOKEN"]
   missing_vars = [var for var in required_envs if os.getenv(var) is None]
   if missing_vars:
     raise EnvironmentError(f"Missing environment variables: {', '.join(missing_vars)}")
   
-  required_folders = [os.getenv("PREDICTIONS_FOLDER_PATH"),os.getenv("PREDICTIONS_LOG_FOLDER_PATH")]
+  required_folders = ["./data/logs","./data/predictions"]
   for folder_path in required_folders:
     if not os.path.exists(folder_path):
       os.makedirs(folder_path)
       print(f"Created folder: {folder_path}")
 
-  requiredBlankFiles = [os.getenv("PREDICTIONS_LOG_FOLDER_PATH")+"/cron_job_logs.txt"]
+  requiredBlankFiles = []
   for reqf in requiredBlankFiles :
     if not os.path.exists(reqf):
       open(reqf, 'w').close()
 
 def getFolderPath(type):
    types = {
-      "predictions": os.getenv("PREDICTIONS_FOLDER_PATH"),
-      "log" : os.getenv("PREDICTIONS_LOG_FOLDER_PATH")
+      "predictions": "./data/predictions",
+      "log" : "./data/logs"
    }
    return types[type]
 
@@ -92,14 +92,17 @@ def savePredictionsToFile(response):
 
 
 def main():
+  print("Starting checks....")
   check()
+  print("Checks done....")
   countryList = ml.model_get_available_country_list()
   for country in countryList:
+    print("Running for "+country)
     predictions = ml.model_run_latest(country)
     #print(predictions)
     savePredictionsToFile(predictions)
     logPrediction(predictions)
-
+  print("Done!")
 
 if __name__ == "__main__":
   main()
