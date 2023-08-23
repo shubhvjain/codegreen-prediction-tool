@@ -1,6 +1,6 @@
 #!/bin/bash
-source .env
 
+source .env
 # Display initial message
 echo "Hello, this script will allow you to create or modify the schedule for running prediction models for all countries"
 
@@ -22,8 +22,8 @@ if ! [[ "$frequency" =~ ^[0-9]+$ && "$frequency" -ge 1 && "$frequency" -le 24 ]]
 fi
 
 # Set up or modify the cron job
-cron_command="bash ~/code/bionets/codegreen-prediction-tool/run_models.sh >> $PREDICTIONS_LOG_FOLDER_PATH/cron_job_logs.txt"  # Replace with the actual path to run_model.sh
-existing_cron_job_line="0 */$frequency * * * $cron_command"
+cron_command="bash $PREDICTIONS_REPO_FOLDER_PATH/run_models.sh >> $PREDICTIONS_LOG_FOLDER_PATH/cron_job_logs.txt 2>&1"  # Replace with the actual path to run_model.sh
+existing_cron_job_line="*/$frequency * * * * $cron_command"
 
 # Remove any existing cron job with the same command
 crontab -l | grep -v "$cron_command" | crontab -
@@ -32,5 +32,7 @@ crontab -l | grep -v "$cron_command" | crontab -
 echo "$existing_cron_job_line" | crontab -
 
 # Get the PID of the newly added cron job
+new_pid=$(ps aux | grep "$cron_command" | grep -v "grep" | awk '{print $2}')
 
 echo "Cron job set up successfully with a frequency of $frequency hours!"
+# echo "Process ID (PID ) of the cron job: $new_pid"
