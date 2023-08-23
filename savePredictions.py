@@ -6,8 +6,11 @@ import os
 import datetime
 import logging
 from datetime import datetime, timedelta
+import redis
 from dotenv import load_dotenv
 load_dotenv(".config")
+import json
+
 
 def check():
   required_envs = ["ENTSOE_TOKEN"]
@@ -25,6 +28,12 @@ def check():
   for reqf in requiredBlankFiles :
     if not os.path.exists(reqf):
       open(reqf, 'w').close()
+  checkRedis()
+
+def checkRedis():
+   redis_url = os.getenv("PREDICTIONS_REDIS_URL")
+   r = redis.from_url(redis_url)
+   print(r.ping())
 
 def getFolderPath(type):
    types = {
@@ -91,6 +100,25 @@ def savePredictionsToFile(response):
     mergedData.to_csv(file_path, index=False, mode='w')
 
 
+def savePredictionsToRedis(response):
+  key_name = response["input"]["country"]+"_forecast"
+  newData = response["output"]
+  newData["startTime"] =  pd.to_datetime(newData['startTime']).astype("str")
+  forecast_data =  {
+    "data": newData.to_dict(),
+    "timeInterval": 60,
+  }
+  print(forecast_data)
+  last_update = str(datetime.now())
+  cached_object = {
+      "data": forecast_data["data"],
+      "timeInterval": forecast_data["timeInterval"],
+      "last_updated": last_update,
+  }
+  redis_url = os.getenv("PREDICTIONS_REDIS_URL")
+  r = redis.from_url(redis_url)
+  r.set(key_name, json.dumps(cached_object))
+
 def main():
   print("Starting checks....")
   check()
@@ -101,6 +129,7 @@ def main():
     predictions = ml.model_run_latest(country)
     #print(predictions)
     savePredictionsToFile(predictions)
+    savePredictionsToRedis(predictions)
     logPrediction(predictions)
   print("Done!")
 
