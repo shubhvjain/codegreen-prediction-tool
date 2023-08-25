@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 load_dotenv(".config")
 import json
 
-
 def check():
   required_envs = ["ENTSOE_TOKEN"]
   missing_vars = [var for var in required_envs if os.getenv(var) is None]
@@ -28,12 +27,16 @@ def check():
   for reqf in requiredBlankFiles :
     if not os.path.exists(reqf):
       open(reqf, 'w').close()
+  
   checkRedis()
 
 def checkRedis():
-   redis_url = os.getenv("PREDICTIONS_REDIS_URL")
-   r = redis.from_url(redis_url)
-   print(r.ping())
+  try:
+    redis_url = os.getenv("PREDICTIONS_REDIS_URL")
+    r = redis.from_url(redis_url)
+    print(r.ping())
+  except Exception:
+    print("Error in connecting to redis server")
 
 def getFolderPath(type):
    types = {
@@ -108,7 +111,6 @@ def savePredictionsToRedis(response):
     "data": newData.to_dict(),
     "timeInterval": 60,
   }
-  print(forecast_data)
   last_update = str(datetime.now())
   cached_object = {
       "data": forecast_data["data"],
