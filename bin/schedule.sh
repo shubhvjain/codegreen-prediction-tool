@@ -34,8 +34,8 @@ fi
 
 # Set up or modify the cron job
 cron_command="bash $run_script_full_path >> $cron_log_full_path"  # Replace with the actual path to run_model.sh
-# existing_cron_job_line="0 */$PREDICTIONS_CRON_JOB_FREQ_HOUR * * * $cron_command"
-existing_cron_job_line="*/$PREDICTIONS_CRON_JOB_FREQ_HOUR * * * * $cron_command"
+existing_cron_job_line="0 */$PREDICTIONS_CRON_JOB_FREQ_HOUR * * * $cron_command"
+# existing_cron_job_line="*/$PREDICTIONS_CRON_JOB_FREQ_HOUR * * * * $cron_command"
 
 
 # Remove any existing cron job with the same command

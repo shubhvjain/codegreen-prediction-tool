@@ -27,4 +27,10 @@ else
     echo "Container $container_name does not exist."
 fi
 
-docker create --name "$container_name" -v "$PREDICTIONS_DOCKER_VOLUME_PATH:/app/data" "$docker_image"
+docker create --name "$container_name" -v "$PREDICTIONS_DOCKER_VOLUME_PATH:/app/data" "$docker_image" 
+docker network connect greenerai_default "$container_name"
+
+# echo "docker run --network greenerai_default --name $container_name  -v $PREDICTIONS_DOCKER_VOLUME_PATH:/app/data $docker_image"
+# docker compose build
+# docker run --name "$container_name"  --network "greenerai"  -v "$PREDICTIONS_DOCKER_VOLUME_PATH:/app/data" "$docker_image" 
+# docker network connect greenerai "$container_name"
