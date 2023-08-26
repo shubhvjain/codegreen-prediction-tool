@@ -2,6 +2,7 @@
 
 docker_image="codegreen-prediction-tool"
 container_name="codegreen-prediction-tool"
+
 config_file=".config"
 
 if [ -e "$config_file" ]; then
@@ -28,7 +29,7 @@ else
 fi
 
 docker create --name "$container_name" -v "$PREDICTIONS_DOCKER_VOLUME_PATH:/app/data" "$docker_image" 
-docker network connect greenerai_default "$container_name"
+docker network connect "$GREENERAI_DOCKER_NETWORK" "$container_name"
 
 # echo "docker run --network greenerai_default --name $container_name  -v $PREDICTIONS_DOCKER_VOLUME_PATH:/app/data $docker_image"
 # docker compose build
