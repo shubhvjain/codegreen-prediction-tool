@@ -6,3 +6,4 @@ tensorflow
 python-dotenv
 redis
 codecarbon
+flask
