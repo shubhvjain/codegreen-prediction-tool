@@ -8,8 +8,11 @@ import logging
 from datetime import datetime, timedelta
 import redis
 from dotenv import load_dotenv
-load_dotenv(".config")
 import json
+from codecarbon import OfflineEmissionsTracker
+
+def loadConfig():
+  load_dotenv(".config")
 
 def check():
   required_envs = ["ENTSOE_TOKEN"]
@@ -110,18 +113,16 @@ def savePredictionsToRedis(response):
   forecast_data =  {
     "data": newData.to_dict(),
     "timeInterval": 60,
-  }
-  last_update = str(datetime.now())
-  cached_object = {
-      "data": forecast_data["data"],
-      "timeInterval": forecast_data["timeInterval"],
-      "last_updated": last_update,
+    "last_updated": str(datetime.now())
   }
   redis_url = os.getenv("PREDICTIONS_REDIS_URL")
   r = redis.from_url(redis_url)
-  r.set(key_name, json.dumps(cached_object))
+  r.set(key_name, json.dumps(forecast_data))
 
-def main():
+def savePredictions():
+  iso_code = os.getenv("CODECARBON_COUNTRY_ISO")
+  tracker = OfflineEmissionsTracker(country_iso_code=iso_code,output_file="emission_bulk.csv")
+  tracker.start()
   print("Starting checks....")
   check()
   print("Checks done....")
@@ -134,6 +135,11 @@ def main():
     savePredictionsToRedis(predictions)
     logPrediction(predictions)
   print("Done!")
+  tracker.stop()
+
+def main():
+  loadConfig()  
+  savePredictions()  
 
 if __name__ == "__main__":
   main()

@@ -5,3 +5,4 @@ entsoe-py
 tensorflow
 python-dotenv
 redis
+codecarbon
