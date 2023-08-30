@@ -1,55 +1,69 @@
-# To generate predictions in bulk 
+"""This file contains the scripts that will be run to generate prediction models for all avaialbe countries. the values will be stored in the csv file and saved to a redis server. each run is also stored in a log file 
+"""
 
-import predictionModel as ml
 import pandas as pd
 import os
 import datetime
-import logging
 from datetime import datetime, timedelta
 import redis
-from dotenv import load_dotenv
-load_dotenv(".config")
 import json
+from dotenv import load_dotenv
+from . import predictionModel as ml
+
+
+def loadEnv():
+    """This method loads the environment variables stored in the `.config` file at the root of the project. """
+    load_dotenv(".config")
+
 
 def check():
-  required_envs = ["ENTSOE_TOKEN"]
-  missing_vars = [var for var in required_envs if os.getenv(var) is None]
-  if missing_vars:
-    raise EnvironmentError(f"Missing environment variables: {', '.join(missing_vars)}")
-  
-  required_folders = ["./data/logs","./data/predictions"]
-  for folder_path in required_folders:
-    if not os.path.exists(folder_path):
-      os.makedirs(folder_path)
-      print(f"Created folder: {folder_path}")
+    """This method ensures that everything is properly configured before advancing to execute prediction models. 
+    This includes:
+    - Confirming the existence of necessary environment variables.
+    - Validating the presence of required folders. Two folders, namely `logs` and `predictions`, should be present within the `data` folder.
+    - Verifying the availability of the Redis server.
+    """
+    required_envs = ["ENTSOE_TOKEN"]
+    missing_vars = [var for var in required_envs if os.getenv(var) is None]
+    if missing_vars:
+        raise EnvironmentError(
+            f"Missing environment variables: {', '.join(missing_vars)}")
 
-  requiredBlankFiles = []
-  for reqf in requiredBlankFiles :
-    if not os.path.exists(reqf):
-      open(reqf, 'w').close()
-  
-  checkRedis()
+    required_folders = ["./data/logs", "./data/predictions"]
+    for folder_path in required_folders:
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+            print(f"Created folder: {folder_path}")
+
+    requiredBlankFiles = []
+    for reqf in requiredBlankFiles:
+        if not os.path.exists(reqf):
+            open(reqf, 'w').close()
+
+    checkRedis()
+
 
 def checkRedis():
-  try:
-    redis_url = os.getenv("PREDICTIONS_REDIS_URL")
-    r = redis.from_url(redis_url)
-    print(r.ping())
-  except Exception:
-    print("Error in connecting to redis server")
+    """This method check the availability of Redis server"""
+    try:
+        redis_url = os.getenv("PREDICTIONS_REDIS_URL")
+        r = redis.from_url(redis_url)
+        print(r.ping())
+    except Exception:
+        print("Error in connecting to redis server")
 
-def getFolderPath(type):
-   types = {
-      "predictions": "./data/predictions",
-      "log" : "./data/logs"
-   }
-   return types[type]
 
 def getLogFileName(country):
+    """Returns the current  log file name for the specified country. 
+    It the file doesn't exists, a blank file will be created.
+    Logs records are stored in simple text files within the 'logs' folder located inside the 'data' folder. 
+    The names of file have the format : "country code-current month-current year", 
+    guaranteeing a distinct log file for each country and month of the year. 
+    """
     current_month = datetime.now().strftime('%m')
     current_year = datetime.now().strftime('%Y')
     file_name = f"{country}-{current_month}-{current_year}.log"
-    folder_path = getFolderPath("log")
+    folder_path = "./data/logs"
     file_path = os.path.join(folder_path, file_name)
     if not os.path.exists(file_path):
         open(file_path, 'w').close()
@@ -57,15 +71,16 @@ def getLogFileName(country):
 
 
 def logPrediction(response):
+    """This method logs predictions made by a model. It requires the full response of the run model method
+    response format : { "input": { "country":"", "model":"", "start":"", "end":"",  "percentRenewable":[],  } , "output": <pandas dataframe> }
+    Log entry format (single line) : timestamp : model-name input_starttime input_endtime input(percent renewable )[] output[](percent renewable values for next 48 hours)
+    """
     logFileName = getLogFileName(response["input"]["country"])
-    # logging.basicConfig(filename=logFileName, format='%(asctime)s -  %(message)s', level=logging.INFO )
     ouputString = response["output"]["percentRenewableForecast"].tolist()
-    # model-name input_starttime input_endtime input[] output[]
-    logString = str(datetime.now())+" : "+response["input"]["model"]+ " "+str(response["input"]["start"])+" "+str(response["input"]["end"])+" "+str(response["input"]["percentRenewable"])+" "+str(ouputString)+"\n"
-    # print(logString)
-    # logging.info(logString+"")
+    logString = str(datetime.now())+" : "+response["input"]["model"] + " "+str(response["input"]["start"])+" "+str(
+        response["input"]["end"])+" "+str(response["input"]["percentRenewable"])+" "+str(ouputString)+"\n"
     with open(logFileName, 'a') as log_file:
-      log_file.write(logString)
+        log_file.write(logString)
 
 
 def get_start_end_dates():
@@ -74,66 +89,71 @@ def get_start_end_dates():
     end_date = today + timedelta(days=7)
     return start_date, end_date
 
+
 def savePredictionsToFile(response):
     file_name = response["input"]["country"]+".csv"
-    folder_path =  getFolderPath("predictions")
-    file_path = os.path.join(folder_path,file_name)
+    folder_path = "./data/predictions"
+    file_path = os.path.join(folder_path, file_name)
     if not os.path.exists(file_path):
         open(file_path, 'w').close()
 
     try:
-      oldData = pd.read_csv(folder_path+"/"+file_name)
-      # print(oldData)
+        oldData = pd.read_csv(folder_path+"/"+file_name)
     except pd.errors.EmptyDataError:
-      oldData = pd.DataFrame(columns=['startTime', 'percentRenewableForecast'])
-    
-    oldData["startTime"] =  pd.to_datetime(oldData['startTime']) # .dt.strftime('%Y%m%d%H%M')
-    # print(oldData)
+        oldData = pd.DataFrame(
+            columns=['startTime', 'percentRenewableForecast'])
+
+    oldData["startTime"] = pd.to_datetime(oldData['startTime'])  
     newData = response["output"]
-    newData["startTime"] =  pd.to_datetime(newData['startTime']) # .dt.strftime('%Y%m%d%H%M')
-    # print(newData)
-    mergedData = pd.concat([oldData,newData]).drop_duplicates(subset="startTime",keep='last')
-    # print(mergedData)
+    newData["startTime"] = pd.to_datetime(newData['startTime'])
+    mergedData = pd.concat([oldData, newData]).drop_duplicates(
+        subset="startTime", keep='last')
 
     start_date, end_date = get_start_end_dates()
     # Filter the merged DataFrame
-    filteredData = mergedData[(mergedData['startTime'] >= start_date) & (mergedData['startTime'] <= end_date)]
+    filteredData = mergedData[(mergedData['startTime'] >= start_date) & (
+        mergedData['startTime'] <= end_date)]
     # filteredData['startTime'] = filteredData['startTime'].dt.strftime('%Y%m%d%H%M')
     # filteredData.to_csv(file_path, index=False, mode='w')
     mergedData.to_csv(file_path, index=False, mode='w')
 
 
 def savePredictionsToRedis(response):
-  key_name = response["input"]["country"]+"_forecast"
-  newData = response["output"]
-  newData["startTime"] =  pd.to_datetime(newData['startTime']).astype("str")
-  forecast_data =  {
-    "data": newData.to_dict(),
-    "timeInterval": 60,
-  }
-  last_update = str(datetime.now())
-  cached_object = {
-      "data": forecast_data["data"],
-      "timeInterval": forecast_data["timeInterval"],
-      "last_updated": last_update,
-  }
-  redis_url = os.getenv("PREDICTIONS_REDIS_URL")
-  r = redis.from_url(redis_url)
-  r.set(key_name, json.dumps(cached_object))
+    key_name = response["input"]["country"]+"_forecast"
+    newData = response["output"]
+    newData["startTime"] = pd.to_datetime(newData['startTime']).astype("str")
+    forecast_data = {
+        "data": newData.to_dict(),
+        "timeInterval": 60,
+    }
+    last_update = str(datetime.now())
+    cached_object = {
+        "data": forecast_data["data"],
+        "timeInterval": forecast_data["timeInterval"],
+        "last_updated": last_update,
+    }
+    redis_url = os.getenv("PREDICTIONS_REDIS_URL")
+    r = redis.from_url(redis_url)
+    r.set(key_name, json.dumps(cached_object))
+
 
 def main():
-  print("Starting checks....")
-  check()
-  print("Checks done....")
-  countryList = ml.model_get_available_country_list()
-  for country in countryList:
-    print("Running for "+country)
-    predictions = ml.model_run_latest(country)
-    #print(predictions)
-    savePredictionsToFile(predictions)
-    savePredictionsToRedis(predictions)
-    logPrediction(predictions)
-  print("Done!")
+    # load config file
+    loadEnv()
+    print("Starting checks....")
+    check()
+    print("Checks done....")
+    # get list of available models 
+    countryList = ml.model_get_available_country_list()
+    for country in countryList:
+        print("Running for "+country)
+        # run model and stored it in csv file and to the redis server and log it
+        predictions = ml.model_run_latest(country)
+        savePredictionsToFile(predictions)
+        savePredictionsToRedis(predictions)
+        logPrediction(predictions)
+    print("Done!")
+
 
 if __name__ == "__main__":
-  main()
+    main()
