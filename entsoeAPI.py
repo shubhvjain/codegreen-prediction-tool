@@ -18,7 +18,7 @@ def get_API_token() -> str:
 def refine_data(options, data1):
     """Returns a refined version of the dataframe. 
     The Refining process involves finding missing values and substituting them with average values. 
-    Additionally, a new column `startTime` is appended to the dataframe representing the start time in UTC  
+    Additionally, a new column `startTimeUTC` is appended to the dataframe representing the start time in UTC  
     :param options 
     :param data1 : the dataframe that has to be refined. Assuming it has a datetime index in local time zone with country info
     :returns {"data":Refined data frame, "refine_logs":["list of refinements made"]}
@@ -68,9 +68,10 @@ def refine_data(options, data1):
         # data1 = pd.concat([data1, new_row])
 
     """ Currently, the datatime index is set in the time zone of the data's country of origin. 
-    We convert it into UTC and add it as a new column named 'startTime' in the 'YYYYMMDDhhmm' format.
+    We convert it into UTC and add it as a new column named 'startTimeUTC' in the 'YYYYMMDDhhmm' format.
     """
-    data1['startTime'] = (data1.index.tz_convert('UTC')).strftime('%Y%m%d%H%M')
+    data1['startTimeUTC'] = (data1.index.tz_convert('UTC')).strftime('%Y%m%d%H%M')
+    # data1['startTimeLocal'] = (data1.index).strftime('%Y%m%d%H%M')
     # since missing values are concatenated to the dataframe, it is also sorted based on the datetime index
     data1.sort_index(inplace=True)
     return {"data": data1, "refine_logs": refine_logs}
@@ -128,9 +129,6 @@ def entsoe_get_total_forecast(options={"country": "", "start": "", "end": ""}):
     return {"data": refined_data, "duration": durationMin, "refine_logs": data2["refine_logs"]}
 
 
-# print(entsoe_get_total_forecast(
-#     {"country": "BG", "start": "202103270000", "end": "202103290000"}))
-
 
 def entsoe_get_wind_solar_forecast(options={"country": "", "start": "", "end": ""}):
     """Fetches the aggregated day ahead wind and solar generation forecast data  (14.1.D) for the given country within the given start and end date
@@ -172,18 +170,22 @@ def convert_to_60min_interval(rawData):
         # determining how many rows need to be combined to get data in 60 min format.
         groupingFactor = int(60/duration)
         oldData = rawData["data"]
-        oldData["startTime"] = pd.to_datetime(oldData['startTime'])
-        start_time = oldData["startTime"] .min()
-        end_time = oldData["startTime"] .max()
+        oldData["startTimeUTC"] = pd.to_datetime(oldData['startTimeUTC'])
+        start_time = oldData["startTimeUTC"] .min()
+        end_time = oldData["startTimeUTC"] .max()
         durationMin = 60
+        # removing the old timestamps (which are not 60 mins apart)
+        dataColToRemove = ['startTimeUTC']
+        # dataColToRemove = ['startTimeUTC','startTimeLocal']
+        oldData = oldData.drop(dataColToRemove, axis=1)
+
+        oldData['group_id'] = oldData.index // groupingFactor
+        newGroupedData = oldData.groupby('group_id').mean()
+        # new timestamps which are 60 min apart 
         new_timestamps = pd.date_range(
             start=start_time, end=end_time, freq=f"{durationMin}T", tz='UTC')
         new_timestamps = new_timestamps.strftime('%Y%m%d%H%M')
-        dataColToRemove = ['startTime']
-        oldData = oldData.drop(dataColToRemove, axis=1)
-        oldData['group_id'] = oldData.index // groupingFactor
-        newGroupedData = oldData.groupby('group_id').mean()
-        newGroupedData["startTime"] = new_timestamps
+        newGroupedData["startTimeUTC"] = new_timestamps
         return newGroupedData
 
 
@@ -203,8 +205,8 @@ def get_actual_percent_renewable(country, start, end, interval60=False) -> pd.Da
         duration = 60
     else:
         table = total
-    print("actual total")
-    print(totalRaw["refine_logs"])
+    # print("actual total")
+    # print(totalRaw["refine_logs"])
     # finding the percent renewable
     renewableSources = ["Geothermal", "Hydro Pumped Storage", "Hydro Run-of-river and poundage",
                         "Hydro Water Reservoir", "Marine", "Other renewable", "Solar", "Waste", "Wind Offshore", "Wind Onshore"]
@@ -251,10 +253,8 @@ def get_forecast_percent_renewable(country, start, end) -> pd.DataFrame:
         windsolar = convert_to_60min_interval(windsolarRaw)
     else:
         windsolar = windsolarRaw["data"]
-    print("wind solar forecast raw")
-    print(windsolarRaw["refine_logs"])
-    print("total forecast raw")
-    print(totalRaw["refine_logs"])
+    # print("wind solar forecast raw"); print(windsolarRaw["refine_logs"])
+    # print("total forecast raw"); print(totalRaw["refine_logs"])
     windsolar["total"] = total["total"]
     windsolar["percentRenewable"] = (
         windsolar['totalRenewable'] / windsolar['total']) * 100
