@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import redis
 import json
 from dotenv import load_dotenv
-from . import predictionModel as ml
+import predictionModel as ml
 
 
 def loadEnv():
@@ -73,7 +73,7 @@ def getLogFileName(country):
 def logPrediction(response):
     """This method logs predictions made by a model. It requires the full response of the run model method
     response format : { "input": { "country":"", "model":"", "start":"", "end":"",  "percentRenewable":[],  } , "output": <pandas dataframe> }
-    Log entry format (single line) : timestamp : model-name input_starttime input_endtime input(percent renewable )[] output[](percent renewable values for next 48 hours)
+    Log entry format (single line) : timestamp : model-name input_starttime_UTC  input_endtime_UTC input(percent renewable )[] output[](percent renewable values for next 48 hours)
     """
     logFileName = getLogFileName(response["input"]["country"])
     ouputString = response["output"]["percentRenewableForecast"].tolist()
@@ -101,19 +101,19 @@ def savePredictionsToFile(response):
         oldData = pd.read_csv(folder_path+"/"+file_name)
     except pd.errors.EmptyDataError:
         oldData = pd.DataFrame(
-            columns=['startTime', 'percentRenewableForecast'])
+            columns=['startTimeUTC', 'percentRenewableForecast'])
 
-    oldData["startTime"] = pd.to_datetime(oldData['startTime'])  
+    oldData["startTimeUTC"] = pd.to_datetime(oldData['startTimeUTC'])  
     newData = response["output"]
-    newData["startTime"] = pd.to_datetime(newData['startTime'])
+    newData["startTimeUTC"] = pd.to_datetime(newData['startTimeUTC'])
     mergedData = pd.concat([oldData, newData]).drop_duplicates(
-        subset="startTime", keep='last')
+        subset="startTimeUTC", keep='last')
 
     start_date, end_date = get_start_end_dates()
     # Filter the merged DataFrame
-    filteredData = mergedData[(mergedData['startTime'] >= start_date) & (
-        mergedData['startTime'] <= end_date)]
-    # filteredData['startTime'] = filteredData['startTime'].dt.strftime('%Y%m%d%H%M')
+    filteredData = mergedData[(mergedData['startTimeUTC'] >= start_date) & (
+        mergedData['startTimeUTC'] <= end_date)]
+    # filteredData['startTimeUTC'] = filteredData['startTimeUTC'].dt.strftime('%Y%m%d%H%M')
     # filteredData.to_csv(file_path, index=False, mode='w')
     mergedData.to_csv(file_path, index=False, mode='w')
 
@@ -121,7 +121,7 @@ def savePredictionsToFile(response):
 def savePredictionsToRedis(response):
     key_name = response["input"]["country"]+"_forecast"
     newData = response["output"]
-    newData["startTime"] = pd.to_datetime(newData['startTime']).astype("str")
+    newData["startTimeUTC"] = pd.to_datetime(newData['startTimeUTC']).astype("str")
     forecast_data = {
         "data": newData.to_dict(),
         "timeInterval": 60,
@@ -138,17 +138,18 @@ def savePredictionsToRedis(response):
 
 
 def main():
+    """This is the main script"""
     # load config file
     loadEnv()
     print("Starting checks....")
     check()
     print("Checks done....")
     # get list of available models 
-    countryList = ml.model_get_available_country_list()
+    countryList = ml.get_available_country_list()
     for country in countryList:
         print("Running for "+country)
         # run model and stored it in csv file and to the redis server and log it
-        predictions = ml.model_run_latest(country)
+        predictions = ml.run_latest_model(country)
         savePredictionsToFile(predictions)
         savePredictionsToRedis(predictions)
         logPrediction(predictions)

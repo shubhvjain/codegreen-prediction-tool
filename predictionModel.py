@@ -15,10 +15,9 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import load_model
 
-from . import entsoeAPI as en
+import entsoeAPI as en
 
-
-def model_get_metaData(model):
+def get_model_metadata(model):
     """Returns metadata for the selected model from the metadata.json file in the model folder"""
     with open("./models/metadata.json", "r") as file:
         data = json.load(file)
@@ -29,7 +28,7 @@ def model_get_metaData(model):
             raise Exception("Invalid model name")
 
 
-def model_get_available_country_list():
+def get_available_country_list():
     """Returns a list of country codes for which prediction models are available.
     All models are stored in the 'model' folder. There can be multiple models for one country.
     This method returns the unique names of all countries for which models exist.
@@ -43,7 +42,7 @@ def model_get_available_country_list():
     return list(country_names)
 
 
-def model_get_latest_name_for(country):
+def get_latest_model_name_for(country):
     """Returns the latest prediction model version number for a country.
     All models stored in the 'model' folder follow a common file naming convention: "countrycode_version".
     This method returns the value of the highest version available for the given country.
@@ -59,60 +58,61 @@ def model_get_latest_name_for(country):
     return highestNumberFile
 
 
-def util_get_date_range():
-    """Returns a dictionary with 2 keys: "start" and "end".
-    The "start" date is 5 days before the current date, and the "end" date is 2 days after the current date.
-    Both dates are in the format YYYYMMDDhhmm, with the "hhmm" part set as "0000".
+def get_date_range():
+    """Returns a dictionary comprising two keys: 'start' and 'end'. 
+    These values are used as the start and end dates to retrieve actual generation data from the ENTSOE API.
+    The 'start' date is established as 3 days before the current date, ensuring a comprehensive historical range. 
+    The 'end' date aligns with the start of the last hour, which guarantees data retrieval up to 2 hours before the present hour. 
+    According to the ENTSOE regulation, actual generation values shall be published on later than one after the operational period
+    As various countries report data in either 15-minute or 60-minute intervals, it's prudent to assume that accurate data is available 
+    for 2 hours prior to the current hour. 
+    Both dates adhere to the format YYYYMMDDhhmm, with the 'hhmm' portion set as '0000'.    
+    For instance, if the current time is 14:34, the end date will be 13:00 of the current day, encompassing data up to the preceding hour.
     """
-    # Get today's date
     today_utc = datetime.now()
-    # Calculate start and end dates
-    start_date = (today_utc - timedelta(days=5)).replace(hour=0,
+    start_date = (today_utc - timedelta(days=3)).replace(hour=0,
                                                          minute=0, second=0, microsecond=0)
-    end_date = (today_utc + timedelta(days=2)).replace(hour=0,
-                                                       minute=0, second=0, microsecond=0)
-    # Format dates in "YYYYMMDDhhmm" format
+    end_date = (today_utc - timedelta(hours=1)
+                ).replace(minute=0, second=0, microsecond=0)
     start_date_str = start_date.strftime('%Y%m%d%H%M')
     end_date_str = end_date.strftime('%Y%m%d%H%M')
-    date_range = {
-        "start": start_date_str,
-        "end": end_date_str
-    }
+    date_range = {"start": start_date_str, "end": end_date_str}
     return date_range
 
 
-def ENTSOE_get_percent_renewable_forecasts(country, input_sequence):
-    ''' Returns a pandas DataFrame of the hourly forecasted percentage of renewable energy collected from the ENTSOE portal for a 
-    specified country over the last n hours.
+def get_percent_actual_generation(country, input_sequence):
+    ''' Returns a pandas DataFrame of the hourly actual percentage of renewable energy collected from the ENTSOE portal for a 
+    specified country over the last n hours. The last hour will be the current hour or hour upto which data is available. 
     The value of n is determined by the input_sequence provided.
     The output from this method serves as input for running the model.
-    The start time corresponds to 5 days prior to the current date, and the end time corresponds to 2 days after the current date.
     '''
-    input = util_get_date_range()
-    input["country"] = country
-    data = en.getRenewableForecast(input)
-    last_n_rows = data["data"].tail(input_sequence)
+    input = get_date_range()
+    data = en.get_actual_percent_renewable(
+        country, input["start"], input["end"], True)
+    # data.to_csv("./data/test-"+country+".csv")
+    last_n_rows = data.tail(input_sequence)
     return last_n_rows
 
 
-def model_run(model_name, input):
-    """Generates the next 48-hour prediction values by executing the provided model using the corresponding input data.
-    Model name is the string
-    input is the pandas dataframe 
+def run_model(model_name, input) -> pd.DataFrame:
+    """Generates prediction values for the next 48 hours by running the provided model, using the input data. 
+    :param model_name : The file name of a model (without any extension) located within the 'model' folder. E.g "FR_v5"
+    :param input : pd.DataFrame containing the actual percentage of renewable values up to a certain time period in the recent past
+    Predictions are generated for the upcoming 48 hours, starting from the last hour in the input data
     """
     seq_length = len(input)
-    date = input[['startTime']].copy()
-    # Convert 'startTime' column to datetime
-    date['startTime'] = pd.to_datetime(date['startTime'])
+    date = input[['startTimeUTC']].copy()
+    # Convert 'startTimeUTC' column to datetime
+    date['startTimeUTC'] = pd.to_datetime(date['startTimeUTC'])
     # Get the last date value
-    last_date = date.iloc[-1]['startTime']
+    last_date = date.iloc[-1]['startTimeUTC']
     # Calculate the next hour
     next_hour = last_date + timedelta(hours=1)
     # Create a range of 48 hours starting from the next hour
     next_48_hours = pd.date_range(next_hour, periods=48, freq='H')
     # Create a DataFrame with the next 48 hours
     next_48_hours_df = pd.DataFrame(
-        {'startTime': next_48_hours.strftime('%Y%m%d%H%M')})
+        {'startTimeUTC': next_48_hours.strftime('%Y%m%d%H%M')})
     # print(next_48_hours_df)
     # Construct the model filename by appending '.h5' to the model name
     model_filename = "./models/"+model_name
@@ -136,7 +136,7 @@ def model_run(model_name, input):
         prev_values_total = prev_values_total[1:]
     # Create a DataFrame
     forecast_df = pd.DataFrame(
-        {'startTime': next_48_hours_df['startTime'], 'percentRenewableForecast': forecast_values_total})
+        {'startTimeUTC': next_48_hours_df['startTimeUTC'], 'percentRenewableForecast': forecast_values_total})
     forecast_df["percentRenewableForecast"] = forecast_df["percentRenewableForecast"].round(
     ).astype(int)
     forecast_df['percentRenewableForecast'] = forecast_df['percentRenewableForecast'].apply(
@@ -144,25 +144,25 @@ def model_run(model_name, input):
     return forecast_df
 
 
-def model_run_latest(country) -> dict:
+def run_latest_model(country) -> dict:
     """ Returns  predictions by running the latest version of model available for the input country
     :param country : 2 letter country code
     :type country : str
     :return Dictionary { "input": { "country":"", "model":"", "start":"", "end":"",  "percentRenewable":[],  } , "output": <pandas dataframe> }
     """
     # get the name of the latest model  and its metadata
-    model_name = model_get_latest_name_for(country)
-    model_meta = model_get_metaData(model_name)
+    model_name = get_latest_model_name_for(country)
+    model_meta = get_model_metadata(model_name)
     input_sequence = model_meta["input_sequence"]
     country = model_meta["country"]
-    # get input for the model : last n values of percent renewable 
-    input_data = ENTSOE_get_percent_renewable_forecasts(
-        country, input_sequence)
+    # get input for the model : last n values of percent renewable
+    input_data = get_percent_actual_generation(country, input_sequence)
+    #print(input_data)
     input_percentage = input_data["percentRenewable"].tolist()
-    input_start = input_data.iloc[0]["startTime"]
-    input_end = input_data.iloc[-1]["startTime"]
-    # run the model 
-    output = model_run(model_name, input_data)
+    input_start = input_data.iloc[0]["startTimeUTC"]
+    input_end = input_data.iloc[-1]["startTimeUTC"]
+    # run the model
+    output = run_model(model_name, input_data)
     return {
         "input": {
             "country": country,
