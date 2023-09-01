@@ -121,21 +121,20 @@ def savePredictionsToFile(response):
 def savePredictionsToRedis(response):
     key_name = response["input"]["country"]+"_forecast"
     newData = response["output"]
-    newData["startTimeUTC"] = pd.to_datetime(newData['startTimeUTC']).astype("str")
-    forecast_data = {
-        "data": newData.to_dict(),
-        "timeInterval": 60,
-    }
+    newData["startTimeUTC"] = newData['startTimeUTC'].dt.strftime('%Y%m%d%H%M').astype("str")
     last_update = str(datetime.now())
     cached_object = {
-        "data": forecast_data["data"],
-        "timeInterval": forecast_data["timeInterval"],
+        "data": newData.to_dict(),
+        "timeInterval": 60,
         "last_updated": last_update,
     }
-    redis_url = os.getenv("PREDICTIONS_REDIS_URL")
-    r = redis.from_url(redis_url)
-    r.set(key_name, json.dumps(cached_object))
-
+    # print(cached_object)
+    try : 
+        redis_url = os.getenv("PREDICTIONS_REDIS_URL")
+        r = redis.from_url(redis_url)
+        r.set(key_name, json.dumps(cached_object))
+    except Exception :
+        print("Error in saving data Redis cache")
 
 def main():
     """This is the main script"""
