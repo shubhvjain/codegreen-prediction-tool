@@ -10,6 +10,18 @@ One approach to address this challenge is to train prediction models using histo
 
 Now the question arises : how do we deploy these models effectively so that prediction values can be seamlessly integrated into the main Codegreen API while minimizing carbon emissions? This project outlines one approach to do just that.   
 
+# Architecture 
+
+ 
+
+The figure below describes the overall architecture
+
+![Architecture](./docs/arch.png)
+
+- The Codegreen backend uses a redis server to cache forecast values for faster performance. We used this redis as a shared memory between the backend and the prediction tool.
+- We generate a docker container (named `codegreen-prediction-tool`) and add it to the docker network in which Codegreen backend and other services are running. However this container does not run all the time. Instead, a CRON job starts the container after a specified time interval which automatically triggers the script to run models for all available countries and store them. Once finished, the container stops automatically. 
+- The results of the models (the predictions) are send to the redis cache as well as stored in a local data folder. This folder (which also includes logs) can be shared with the host machine 
+
 
 
 # Installation and setup
@@ -46,3 +58,4 @@ Essentially, this file contains environment variables that are then loaded befor
   - `PREDICTIONS_DOCKER_VOLUME_PATH`: The full path on the host machine where the recent prediction files and log files will be stored.
   - `GREENERAI_DOCKER_NETWORK`: The name of the Docker network in which CodeGreen containers are running.
 
+## How to add a new model ?
