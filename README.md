@@ -12,16 +12,15 @@ Now the question arises : how do we deploy these models effectively so that pred
 
 # Architecture 
 
- 
-
-The figure below describes the overall architecture
+The figure below describes the overall architecture of deployment
 
 ![Architecture](./docs/arch.png)
 
-- The Codegreen backend uses a redis server to cache forecast values for faster performance. We used this redis as a shared memory between the backend and the prediction tool.
-- We generate a docker container (named `codegreen-prediction-tool`) and add it to the docker network in which Codegreen backend and other services are running. However this container does not run all the time. Instead, a CRON job starts the container after a specified time interval which automatically triggers the script to run models for all available countries and store them. Once finished, the container stops automatically. 
-- The results of the models (the predictions) are send to the redis cache as well as stored in a local data folder. This folder (which also includes logs) can be shared with the host machine 
+The Codegreen backend utilizes a Redis server to cache forecast values for improved performance. We used this redis as a shared memory between the backend and our prediction tool.
 
+We  create a docker container (named `codegreen-prediction-tool`) and add it to the docker network in where the Codegreen backend and other services operate. However this container does not run continuously. Instead, a CRON job starts the container after a specified time interval,  automatically triggering the execution of script for running models for all available countries and storing their results. Once this task is completed, the container stops automatically. 
+
+The results of the models (the predictions) are send to the redis cache and stored in a local data folder. This folder ,which also includes logs, is accessible for sharing with the host machine. 
 
 
 # Installation and setup
