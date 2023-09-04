@@ -119,7 +119,7 @@ def savePredictionsToFile(response):
 
 
 def savePredictionsToRedis(response):
-    key_name = response["input"]["country"]+"_forecast"
+    key_name = response["input"]["country"]+"_predictions"
     newData = response["output"]
     newData["startTimeUTC"] = newData['startTimeUTC'].dt.strftime('%Y%m%d%H%M').astype("str")
     last_update = str(datetime.now())
