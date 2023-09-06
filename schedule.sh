@@ -13,7 +13,7 @@ else
     exit 1
 fi
 
-run_script_full_path=$(pwd)/bin/run.sh
+run_script_full_path=$(pwd)/run.sh
 cron_log_full_path=$(pwd)/cron-run.log
 
 
